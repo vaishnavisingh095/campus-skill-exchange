@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Campus Skill Exchange</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="#"><span class="brand-mark">↗</span><span>Campus<span class="brand-light">Exchange</span></span></a>
+    <div class="side-label">WORKSPACE</div>
+    <nav>
+      <a class="nav-item active" href="#overview"><span>▦</span> Overview</a>
+      <a class="nav-item" href="#matches"><span>⌕</span> Find a match <b class="nav-count">4</b></a>
+      <a class="nav-item" href="#requests"><span>⇄</span> My exchanges</a>
+      <a class="nav-item" href="#sessions"><span>▤</span> Sessions</a>
+      <a class="nav-item" href="#profile"><span>◉</span> My profile</a>
+    </nav>
+    <div class="sidebar-bottom"><div class="help-icon">?</div><div><strong>Need a hand?</strong><small>Visit the student guide</small></div><span>↗</span></div>
+  </aside>
+  <main class="main" id="overview">
+    <header class="topbar"><div class="crumb">Workspace <span>/</span> Overview</div><div class="top-actions"><button class="icon-button" aria-label="Notifications">♧<i></i></button><div class="user-chip"><div class="avatar avatar-small">AK</div><div><strong>Arjun Kumar</strong><small>Computer Science · Year 3</small></div><span>⌄</span></div></div></header>
+    <section class="welcome"><div><div class="eyebrow"><span class="live-dot"></span> YOUR CAMPUS, MORE CONNECTED</div><h1>Good morning, Arjun <span>✦</span></h1><p>Share what you know. Learn what moves you forward.</p></div><button class="button button-dark" id="addSkill">＋ Update my skills</button></section>
+    <section class="stats"><article class="stat-card"><div class="stat-head">SKILLS YOU TEACH <span class="stat-icon purple">↗</span></div><div class="stat-number">3</div><div class="stat-foot"><span class="status-dot"></span> Your knowledge, shared</div></article><article class="stat-card"><div class="stat-head">SKILLS TO LEARN <span class="stat-icon orange">⌁</span></div><div class="stat-number">2</div><div class="stat-foot">Keep your curiosity growing</div></article><article class="stat-card"><div class="stat-head">POTENTIAL MATCHES <span class="stat-icon green">⟷</span></div><div class="stat-number">4 <small>people</small></div><div class="stat-foot"><span class="positive">+2</span> new this week</div></article><article class="stat-card"><div class="stat-head">HOURS LEARNED <span class="stat-icon blue">◷</span></div><div class="stat-number">12.5 <small>hrs</small></div><div class="stat-foot">That’s a great start!</div></article></section>
+    <section class="content-grid"><article class="panel match-panel" id="matches"><div class="panel-head"><div><div class="eyebrow">GOOD FITS FOR YOU</div><h2>Skill matches <span class="tiny-count">4</span></h2></div><a href="#matches" class="text-link">Explore all <span>→</span></a></div><div id="matchList"></div></article>
+      <aside class="right-column"><article class="panel request-panel" id="requests"><div class="panel-head"><div><div class="eyebrow">KEEP THINGS MOVING</div><h2>Exchange requests</h2></div><a class="text-link" href="#requests">See all</a></div><div class="request-row"><div class="avatar mint">RS</div><div class="request-copy"><strong>Rahul Sharma</strong><span>Wants to learn <b>Python</b></span></div><span class="request-time">2h</span></div><div class="request-row"><div class="avatar peach">PM</div><div class="request-copy"><strong>Priya Menon</strong><span>Wants to learn <b>SQL</b></span></div><span class="request-time">1d</span></div><button class="button button-outline full-button">View requests <span>→</span></button></article>
+      <article class="tip-card"><div class="tip-art">✳</div><div class="eyebrow">A LITTLE REMINDER</div><h3>Great exchanges start with a conversation.</h3><p>Set a friendly first session and agree on what you’d both like to learn.</p><a href="#sessions">Plan a session <span>→</span></a></article></aside></section>
+    <section class="panel sessions-panel" id="sessions"><div class="panel-head"><div><div class="eyebrow">ON YOUR CALENDAR</div><h2>Upcoming sessions</h2></div><a class="text-link" href="#sessions">View calendar <span>→</span></a></div><div class="session-row"><div class="date-tile"><b>02</b><span>OCT</span></div><div class="session-info"><strong>UI/UX foundations</strong><span>With Rahul Sharma · 4:30 PM · Online</span></div><span class="session-tag">IN 4 DAYS</span><button class="more-button" aria-label="More options">···</button></div><div class="session-row"><div class="date-tile"><b>05</b><span>OCT</span></div><div class="session-info"><strong>SQL joins in practice</strong><span>With Priya Menon · 11:00 AM · Library, Room 2</span></div><span class="session-tag">IN 7 DAYS</span><button class="more-button" aria-label="More options">···</button></div></section>
+    <footer>Built for students, powered by shared curiosity <span>✳</span></footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
