@@ -1,16 +1,23 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import {
   ArrowDownLeft, ArrowRight, ArrowUpRight, Bell, BookOpen, CalendarDays,
-  Check, ChevronDown, CircleAlert, Clock3, GraduationCap, Inbox, LayoutDashboard,
-  LoaderCircle, Menu, Plus, Repeat2, Search, Send, Sparkles, Trash2, UsersRound, Wifi,
+  Check, ChevronDown, CircleAlert, Clock3, Coins, GraduationCap, Inbox, LayoutDashboard,
+  LoaderCircle, LogIn, LogOut, Menu, Plus, Repeat2, Search, Send, Sparkles, Star, Trash2, UsersRound, Wifi,
 } from 'lucide-react'
-import { supabase } from './lib/supabase'
+import {
+  getAuthSession,
+  signInWithCampusEmail,
+  signOutCampus,
+  signUpWithCampusEmail,
+  supabase,
+} from './lib/supabase'
 import { demoSnapshot } from './demo-data'
 import './App.css'
 
 type Student = {
   student_id: number; full_name: string; email: string; department: string
-  year_of_study: number; section: string | null; bio: string | null; account_status: string
+  year_of_study: number; section: string | null; bio: string | null
+  availability?: string; credits?: number; account_status: string
 }
 type Skill = { skill_id: number; category_id: number; skill_name: string; description: string | null }
 type Category = { category_id: number; category_name: string }
@@ -19,7 +26,7 @@ type WantedSkill = { wanted_skill_id: number; student_id: number; skill_id: numb
 type Request = { request_id: number; sender_id: number; receiver_id: number; offered_skill_id: number; requested_skill_id: number; request_message: string | null; requested_at: string; status: string }
 type Exchange = { exchange_id: number; request_id: number; student_one_id: number; student_two_id: number; skill_one_id: number; skill_two_id: number; start_date: string; end_date: string | null; exchange_status: string }
 type Session = { session_id: number; exchange_id: number; mentor_id: number; learner_id: number; skill_id: number; session_date: string; duration_minutes: number; topic: string; meeting_mode: string; session_status: string }
-type Review = { review_id: number; reviewed_student_id: number; rating: number }
+type Review = { review_id: number; exchange_id?: number; reviewer_id?: number; reviewed_student_id: number; rating: number; comment?: string | null }
 type Notice = { notification_id: number; student_id: number; title: string; message: string; is_read: boolean; created_at: string }
 type Page = 'Overview' | 'Discover' | 'Requests' | 'Exchanges' | 'Sessions' | 'My profile'
 
@@ -36,6 +43,10 @@ function App() {
   const [loadError, setLoadError] = useState('')
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState('')
+  const [authEmail, setAuthEmail] = useState<string | null>(null)
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
+  const [authError, setAuthError] = useState('')
   const [students, setStudents] = useState<Student[]>([])
   const [skills, setSkills] = useState<Skill[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -48,6 +59,11 @@ function App() {
   const [notices, setNotices] = useState<Notice[]>([])
   const [studentId, setStudentId] = useState<number>(() => Number(localStorage.getItem('campus-demo-student')) || 0)
   const [search, setSearch] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const [levelFilter, setLevelFilter] = useState('all')
+  const [availabilityFilter, setAvailabilityFilter] = useState('all')
+  const [minCredits, setMinCredits] = useState(0)
+  const [selectedSkillTag, setSelectedSkillTag] = useState('')
   const [showSchedule, setShowSchedule] = useState(false)
 
   const notify = (message: string) => { setToast(message); window.setTimeout(() => setToast(''), 3600) }
@@ -116,36 +132,58 @@ function App() {
         showDemoFallback(failed.error.message)
         return
       }
-    const studentRows = (results[0].data ?? []) as Student[]
-    if (studentRows.length === 0) {
-      showDemoFallback('The new Supabase project is connected, but no student records have been seeded yet')
-      return
-    }
-    setStudents(studentRows)
-    setSkills((results[1].data ?? []) as Skill[])
-    setCategories((results[2].data ?? []) as Category[])
-    setTeaching((results[3].data ?? []) as TeachingSkill[])
-    setWanted((results[4].data ?? []) as WantedSkill[])
-    setRequests((results[5].data ?? []) as Request[])
-    setExchanges((results[6].data ?? []) as Exchange[])
-    setSessions((results[7].data ?? []) as Session[])
-    setReviews((results[8].data ?? []) as Review[])
-    setNotices((results[9].data ?? []) as Notice[])
-    const savedId = Number(localStorage.getItem('campus-demo-student')) || 0
-    if (studentRows.length && !studentRows.some((student) => student.student_id === savedId)) {
-      const chosen = studentRows[0].student_id
-      setStudentId(chosen)
-      localStorage.setItem('campus-demo-student', String(chosen))
-    } else if (studentRows.length && studentRows.some((student) => student.student_id === savedId)) {
-      setStudentId(savedId)
-    }
-    setLoading(false)
+      const studentRows = (results[0].data ?? []) as Student[]
+      if (studentRows.length === 0) {
+        showDemoFallback('The new Supabase project is connected, but no student records have been seeded yet')
+        return
+      }
+      setStudents(studentRows)
+      setSkills((results[1].data ?? []) as Skill[])
+      setCategories((results[2].data ?? []) as Category[])
+      setTeaching((results[3].data ?? []) as TeachingSkill[])
+      setWanted((results[4].data ?? []) as WantedSkill[])
+      setRequests((results[5].data ?? []) as Request[])
+      setExchanges((results[6].data ?? []) as Exchange[])
+      setSessions((results[7].data ?? []) as Session[])
+      setReviews((results[8].data ?? []) as Review[])
+      setNotices((results[9].data ?? []) as Notice[])
+      const session = await getAuthSession()
+      if (session?.user?.email) {
+        setAuthEmail(session.user.email)
+        const matched = studentRows.find((s) => s.email.toLowerCase() === session.user.email?.toLowerCase())
+        if (matched) {
+          setStudentId(matched.student_id)
+          localStorage.setItem('campus-demo-student', String(matched.student_id))
+        }
+      } else {
+        const savedId = Number(localStorage.getItem('campus-demo-student')) || 0
+        if (studentRows.length && !studentRows.some((student) => student.student_id === savedId)) {
+          const chosen = studentRows[0].student_id
+          setStudentId(chosen)
+          localStorage.setItem('campus-demo-student', String(chosen))
+        } else if (studentRows.length && studentRows.some((student) => student.student_id === savedId)) {
+          setStudentId(savedId)
+        }
+      }
+      setLoading(false)
     } catch (error) {
       showDemoFallback(error instanceof Error ? error.message : 'Supabase is unreachable')
     }
   }, [])
 
   useEffect(() => { void loadData() }, [loadData])
+
+  // Real-time subscription for booking requests and session status updates
+  useEffect(() => {
+    const client = supabase
+    if (!client) return
+    const channel = client
+      .channel('campus-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'exchange_requests' }, () => { void loadData() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, () => { void loadData() })
+      .subscribe()
+    return () => { void client.removeChannel(channel) }
+  }, [loadData])
 
   const current = students.find((student) => student.student_id === studentId)
   const studentMap = useMemo(() => new Map(students.map((student) => [student.student_id, student])), [students])
@@ -177,6 +215,23 @@ function App() {
     try { await work(); await loadData() }
     catch (error) { notify(error instanceof Error ? error.message : 'Something went wrong. Please try again.') }
     finally { setBusy(false) }
+  }
+
+  const handleAuthSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setAuthError('')
+    const form = new FormData(event.currentTarget)
+    const email = String(form.get('email') || '')
+    const password = String(form.get('password') || '')
+    const fullName = String(form.get('full_name') || '')
+    const res = authMode === 'signin'
+      ? await signInWithCampusEmail(email, password)
+      : await signUpWithCampusEmail(email, password, fullName)
+    if (res.error) { setAuthError(res.error); return }
+    setAuthEmail(res.user?.email ?? email)
+    setShowAuthModal(false)
+    notify(authMode === 'signin' ? 'Signed in with campus email.' : 'Account created! Check your campus email to verify.')
+    void loadData()
   }
 
   const sendRequest = async (peerId: number, offeredId: number, requestedId: number) => action(async () => {
@@ -239,7 +294,13 @@ function App() {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
     await action(async () => {
-      const { error } = await supabase!.from('students').update({ full_name: form.get('full_name'), department: form.get('department'), year_of_study: Number(form.get('year_of_study')), bio: form.get('bio') }).eq('student_id', studentId)
+      const { error } = await supabase!.from('students').update({
+        full_name: form.get('full_name'),
+        department: form.get('department'),
+        year_of_study: Number(form.get('year_of_study')),
+        availability: String(form.get('availability') || 'weekdays'),
+        bio: form.get('bio'),
+      }).eq('student_id', studentId)
       if (error) throw error
       notify('Profile saved.')
     })
@@ -266,6 +327,29 @@ function App() {
     })
   }
 
+  const completeSession = async (session: Session) => action(async () => {
+    const { error } = await supabase!.from('sessions').update({ session_status: 'completed' }).eq('session_id', session.session_id)
+    if (error) throw error
+    await supabase!.from('skill_exchanges').update({ exchange_status: 'completed', end_date: new Date().toISOString().slice(0, 10) }).eq('exchange_id', session.exchange_id)
+    const mentor = studentMap.get(session.mentor_id)
+    if (mentor) {
+      await supabase!.from('students').update({ credits: (mentor.credits ?? 10) + 2 }).eq('student_id', mentor.student_id)
+    }
+    notify('Session marked completed (+2 mentor credits)!')
+  })
+
+  const submitReview = async (exchangeId: number, partnerId: number, rating: number, comment: string) => action(async () => {
+    const { error } = await supabase!.from('reviews').insert({
+      exchange_id: exchangeId,
+      reviewer_id: studentId,
+      reviewed_student_id: partnerId,
+      rating,
+      comment: comment.trim() || null,
+    })
+    if (error) throw error
+    notify('Feedback & rating submitted!')
+  })
+
   const markRead = async (noticeId: number) => action(async () => {
     const { error } = await supabase!.from('notifications').update({ is_read: true }).eq('notification_id', noticeId)
     if (error) throw error
@@ -291,7 +375,13 @@ function App() {
           <button className="mobile-menu icon-button" aria-label="Open menu" onClick={() => setMobileNav(!mobileNav)}><Menu size={19} /></button>
           <div className="breadcrumbs">Campus <span>/</span> <b>{page}</b></div>
           <div className="topbar-actions">
-            <div className="connection-pill"><span className={loadError ? 'connection-off' : ''} />{loadError ? 'Not connected' : 'Live database'}</div>
+            <div className="credits-pill" title="Skill exchange credits"><Coins size={13} /> {current?.credits ?? 10} credits</div>
+            <div className="connection-pill"><span className={loadError ? 'connection-off' : ''} />{loadError ? 'Demo mode' : 'Live database'}</div>
+            {authEmail ? (
+              <button className="auth-button" onClick={() => { void signOutCampus(); setAuthEmail(null); notify('Signed out.') }}><LogOut size={13} /> Sign out</button>
+            ) : (
+              <button className="auth-button" onClick={() => { setAuthError(''); setShowAuthModal(true) }}><LogIn size={13} /> Campus sign in</button>
+            )}
             <button className="notification-button icon-button" aria-label={`${unreadNotices.length} unread notifications`} onClick={() => setPage('Overview')}><Bell size={18} />{unreadNotices.length > 0 && <i>{unreadNotices.length}</i>}</button>
             <label className="profile-picker"><span className="avatar avatar-mini">{current?.full_name.split(' ').map((name) => name[0]).slice(0, 2).join('') || 'CS'}</span><select aria-label="Choose demo student profile" value={studentId || ''} onChange={(event) => { const id = Number(event.target.value); setStudentId(id); localStorage.setItem('campus-demo-student', String(id)) }}><option value="" disabled>Choose student</option>{students.map((student) => <option key={student.student_id} value={student.student_id}>{student.full_name}</option>)}</select><ChevronDown size={14} /></label>
           </div>
@@ -303,16 +393,77 @@ function App() {
 
           {loading ? <div className="loading-state"><LoaderCircle className="spin" size={22} /> Connecting to your campus database…</div> : !current ? <div className="empty-state"><UsersRound size={26} /><h3>No student profiles found</h3><p>Run the schema and seed SQL in Supabase, then reconnect.</p><button className="button button-outline" onClick={() => void loadData()}>Refresh data</button></div> : <>
             {page === 'Overview' && <Overview current={current} myTeaching={myTeaching} myWanted={myWanted} matches={matches} incoming={incoming} outgoing={outgoing} mySessions={mySessions} completedHours={completedHours} averageRating={averageRating} skillMap={skillMap} studentMap={studentMap} setPage={setPage} sendRequest={sendRequest} respond={respond} busy={busy} />}
-            {page === 'Discover' && <Discover studentId={studentId} matches={matches} requests={requests} search={search} setSearch={setSearch} skillMap={skillMap} sendRequest={sendRequest} busy={busy} />}
+            {page === 'Discover' && (
+              <Discover
+                studentId={studentId}
+                matches={matches}
+                requests={requests}
+                search={search}
+                setSearch={setSearch}
+                categories={categories}
+                categoryFilter={categoryFilter}
+                setCategoryFilter={setCategoryFilter}
+                levelFilter={levelFilter}
+                setLevelFilter={setLevelFilter}
+                availabilityFilter={availabilityFilter}
+                setAvailabilityFilter={setAvailabilityFilter}
+                minCredits={minCredits}
+                setMinCredits={setMinCredits}
+                selectedSkillTag={selectedSkillTag}
+                setSelectedSkillTag={setSelectedSkillTag}
+                skillMap={skillMap}
+                sendRequest={sendRequest}
+                busy={busy}
+              />
+            )}
             {page === 'Requests' && <Requests incoming={incoming} outgoing={outgoing} students={studentMap} skills={skillMap} respond={respond} busy={busy} />}
             {page === 'Exchanges' && <ExchangeList exchanges={myExchanges} studentId={studentId} students={studentMap} skills={skillMap} sessions={sessions} setPage={setPage} />}
-            {page === 'Sessions' && <Sessions sessions={mySessions} studentId={studentId} students={studentMap} skills={skillMap} exchanges={myExchanges} showSchedule={showSchedule} setShowSchedule={setShowSchedule} scheduleSession={scheduleSession} />}
+            {page === 'Sessions' && (
+              <Sessions
+                sessions={mySessions}
+                studentId={studentId}
+                students={studentMap}
+                skills={skillMap}
+                exchanges={myExchanges}
+                reviews={reviews}
+                showSchedule={showSchedule}
+                setShowSchedule={setShowSchedule}
+                scheduleSession={scheduleSession}
+                completeSession={completeSession}
+                submitReview={submitReview}
+                busy={busy}
+              />
+            )}
             {page === 'My profile' && <Profile current={current} teaching={myTeaching} wanted={myWanted} skills={skills} skillMap={skillMap} categoryMap={categoryMap} addSkill={addSkill} removeTeachingSkill={removeTeachingSkill} removeWantedSkill={removeWantedSkill} saveProfile={saveProfile} busy={busy} />}
             <section className="notice-strip"><div className="notice-heading"><span className="notice-icon"><Bell size={15} /></span><div><b>From your campus</b><small>{unreadNotices.length ? `${unreadNotices.length} unread update${unreadNotices.length === 1 ? '' : 's'}` : 'You’re all caught up'}</small></div></div>{unreadNotices.slice(0, 2).map((notice) => <div className="notice-item" key={notice.notification_id}><span><b>{notice.title}</b><small>{notice.message}</small></span><button title="Mark read" onClick={() => void markRead(notice.notification_id)}><Check size={15} /></button></div>)}</section>
           </>}
           <footer className="page-footer"><span>✳</span> Knowledge grows when it’s shared <span className="footer-right">Campus Skill Exchange · 2026</span></footer>
         </div>
       </main>
+
+      {showAuthModal && (
+        <div className="modal-backdrop" onClick={() => setShowAuthModal(false)}>
+          <div className="auth-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Campus Email Sign In</h3>
+            <p>Sign in with your verified <code>.edu</code> campus email to edit your own listings, requests, and sessions.</p>
+            <div className="auth-tabs">
+              <button type="button" className={authMode === 'signin' ? 'active' : ''} onClick={() => { setAuthMode('signin'); setAuthError('') }}>Sign in</button>
+              <button type="button" className={authMode === 'signup' ? 'active' : ''} onClick={() => { setAuthMode('signup'); setAuthError('') }}>Sign up</button>
+            </div>
+            {authError && <div className="auth-error">{authError}</div>}
+            <form className="auth-form" onSubmit={(e) => void handleAuthSubmit(e)}>
+              {authMode === 'signup' && <label>Full name<input name="full_name" required placeholder="Arjun Kumar" /></label>}
+              <label>Campus email<input name="email" type="email" required placeholder="you@campus.edu" /></label>
+              <label>Password<input name="password" type="password" required minLength={6} placeholder="At least 6 characters" /></label>
+              <div className="schedule-submit">
+                <button type="button" className="button button-outline" onClick={() => setShowAuthModal(false)}>Cancel</button>
+                <button type="submit" className="button button-primary">{authMode === 'signin' ? 'Sign in' : 'Create account'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {toast && <div className="toast"><Check size={16} />{toast}</div>}
     </div>
   )
@@ -350,7 +501,7 @@ function PanelHeading({ eyebrow, title, action, onAction }: { eyebrow: string; t
 function MatchCard({ match, index, onConnect, connected, busy, skillMap }: { match: Match; index: number; onConnect: () => void; connected: boolean; busy: boolean; skillMap: Map<number, Skill> }) {
   const initials = match.peer.full_name.split(' ').map((part) => part[0]).slice(0, 2).join('')
   const tones = ['mint', 'lavender', 'peach', 'sky']
-  return <article className="match-card"><div className={`avatar match-avatar ${tones[index % tones.length]}`}>{initials}</div><div className="match-person"><div className="match-name">{match.peer.full_name}<span className="match-check" title="Active student">✓</span></div><div className="match-meta">{match.peer.department} · Year {match.peer.year_of_study}</div><div className="skill-pair"><span className="skill-teach"><ArrowUpRight size={12} /> teaches {skillMap.get(match.offered!.skill_id)?.skill_name}</span><span className="skill-learn"><ArrowDownLeft size={12} /> learns {skillMap.get(match.requested!.skill_id)?.skill_name}</span></div></div><button className={`connect-button ${connected ? 'is-connected' : ''}`} disabled={busy || connected} onClick={onConnect}>{connected ? <><Check size={14} /> Sent</> : <><Send size={13} /> Connect</>}</button></article>
+  return <article className="match-card"><div className={`avatar match-avatar ${tones[index % tones.length]}`}>{initials}</div><div className="match-person"><div className="match-name">{match.peer.full_name}<span className="match-check" title="Active student">✓</span></div><div className="match-meta">{match.peer.department} · Year {match.peer.year_of_study} · {match.peer.availability ?? 'weekdays'} · {match.peer.credits ?? 10} cr</div><div className="skill-pair"><span className="skill-teach"><ArrowUpRight size={12} /> teaches {skillMap.get(match.offered!.skill_id)?.skill_name}</span><span className="skill-learn"><ArrowDownLeft size={12} /> learns {skillMap.get(match.requested!.skill_id)?.skill_name}</span></div></div><button className={`connect-button ${connected ? 'is-connected' : ''}`} disabled={busy || connected} onClick={onConnect}>{connected ? <><Check size={14} /> Sent</> : <><Send size={13} /> Connect</>}</button></article>
 }
 
 function EmptySmall({ title, text, action, onClick }: { title: string; text: string; action?: string; onClick?: () => void }) {
@@ -366,13 +517,78 @@ function SessionRow({ session, partner, skill }: { session: Session; partner: st
   return <div className="session-row"><div className="date-block"><b>{date.toLocaleDateString('en', { day: '2-digit', timeZone: 'UTC' })}</b><span>{date.toLocaleDateString('en', { month: 'short', timeZone: 'UTC' }).toUpperCase()}</span></div><div className="session-copy"><b>{session.topic}</b><small>{skill} · With {partner}</small></div><div className="session-time"><Clock3 size={13} />{date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</div><span className="mode-pill"><Wifi size={12} />{session.meeting_mode === 'online' ? 'Online' : 'In person'}</span></div>
 }
 
-function Discover({ studentId, matches, requests, search, setSearch, skillMap, sendRequest, busy }: { studentId: number; matches: Match[]; requests: Request[]; search: string; setSearch: (value: string) => void; skillMap: Map<number, Skill>; sendRequest: (peerId: number, offeredId: number, requestedId: number) => Promise<void>; busy: boolean }) {
-  const filtered = matches.filter((match) => `${match.peer.full_name} ${match.peer.department} ${skillMap.get(match.offered!.skill_id)?.skill_name} ${skillMap.get(match.requested!.skill_id)?.skill_name}`.toLowerCase().includes(search.toLowerCase()))
+function Discover({
+  studentId, matches, requests, search, setSearch,
+  categories, categoryFilter, setCategoryFilter,
+  levelFilter, setLevelFilter, availabilityFilter, setAvailabilityFilter,
+  minCredits, setMinCredits, selectedSkillTag, setSelectedSkillTag,
+  skillMap, sendRequest, busy,
+}: {
+  studentId: number; matches: Match[]; requests: Request[]; search: string; setSearch: (value: string) => void
+  categories: Category[]; categoryFilter: string; setCategoryFilter: (v: string) => void
+  levelFilter: string; setLevelFilter: (v: string) => void
+  availabilityFilter: string; setAvailabilityFilter: (v: string) => void
+  minCredits: number; setMinCredits: (v: number) => void
+  selectedSkillTag: string; setSelectedSkillTag: (v: string) => void
+  skillMap: Map<number, Skill>; sendRequest: (peerId: number, offeredId: number, requestedId: number) => Promise<void>; busy: boolean
+}) {
+  const availableTags = useMemo(() => {
+    const names = new Set<string>()
+    for (const m of matches) {
+      const s1 = skillMap.get(m.requested!.skill_id)?.skill_name
+      const s2 = skillMap.get(m.offered!.skill_id)?.skill_name
+      if (s1) names.add(s1)
+      if (s2) names.add(s2)
+    }
+    return Array.from(names).sort()
+  }, [matches, skillMap])
+
+  const filtered = matches.filter((match) => {
+    const reqSkill = skillMap.get(match.requested!.skill_id)
+    const offSkill = skillMap.get(match.offered!.skill_id)
+    const textMatch = `${match.peer.full_name} ${match.peer.department} ${offSkill?.skill_name ?? ''} ${reqSkill?.skill_name ?? ''}`.toLowerCase().includes(search.toLowerCase())
+    const catMatch = categoryFilter === 'all' || String(reqSkill?.category_id) === categoryFilter || String(offSkill?.category_id) === categoryFilter
+    const lvlMatch = levelFilter === 'all' || match.requested?.proficiency_level.toLowerCase() === levelFilter
+    const availMatch = availabilityFilter === 'all' || (match.peer.availability ?? 'weekdays') === availabilityFilter
+    const credMatch = (match.peer.credits ?? 10) >= minCredits
+    const tagMatch = !selectedSkillTag || reqSkill?.skill_name === selectedSkillTag || offSkill?.skill_name === selectedSkillTag
+    return textMatch && catMatch && lvlMatch && availMatch && credMatch && tagMatch
+  })
+
   return <section className="surface discover-surface">
     <div className="discover-toolbar">
-      <div><div className="eyebrow">SKILLS THAT GO BOTH WAYS</div><h2>Reciprocal matches <span className="count-pill">{filtered.length}</span></h2><p>Each person has something you want to learn, and wants something you can teach.</p></div>
+      <div><div className="eyebrow">SKILLS THAT GO BOTH WAYS</div><h2>Reciprocal matches <span className="count-pill">{filtered.length}</span></h2><p>Filter by category, skill level, availability, or credit balance.</p></div>
       <label className="search-field"><Search size={16} /><input placeholder="Search people or skills" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
     </div>
+    <div className="filter-bar">
+      <select aria-label="Filter by category" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+        <option value="all">All categories</option>
+        {categories.map((c) => <option key={c.category_id} value={String(c.category_id)}>{c.category_name}</option>)}
+      </select>
+      <select aria-label="Filter by skill level" value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
+        <option value="all">All skill levels</option>
+        <option value="beginner">Beginner</option>
+        <option value="intermediate">Intermediate</option>
+        <option value="advanced">Advanced</option>
+        <option value="expert">Expert</option>
+      </select>
+      <select aria-label="Filter by availability" value={availabilityFilter} onChange={(e) => setAvailabilityFilter(e.target.value)}>
+        <option value="all">Any availability</option>
+        <option value="weekdays">Weekdays</option>
+        <option value="evenings">Evenings</option>
+        <option value="weekends">Weekends</option>
+        <option value="flexible">Flexible</option>
+      </select>
+      <input aria-label="Minimum credits" type="number" min={0} max={100} value={minCredits} onChange={(e) => setMinCredits(Number(e.target.value) || 0)} placeholder="Min credits" />
+    </div>
+    {availableTags.length > 0 && (
+      <div className="skill-tags-row">
+        <button type="button" className={`skill-tag-chip ${!selectedSkillTag ? 'active' : ''}`} onClick={() => setSelectedSkillTag('')}>All tags</button>
+        {availableTags.map((tag) => (
+          <button key={tag} type="button" className={`skill-tag-chip ${selectedSkillTag === tag ? 'active' : ''}`} onClick={() => setSelectedSkillTag(selectedSkillTag === tag ? '' : tag)}>{tag}</button>
+        ))}
+      </div>
+    )}
     <div className="discover-grid">
       {filtered.map((match, index) => <div className="discover-card" key={match.peer.student_id}>
         <MatchCard
@@ -384,10 +600,10 @@ function Discover({ studentId, matches, requests, search, setSearch, skillMap, s
           skillMap={skillMap}
         />
         <p className="bio-snippet">{match.peer.bio || 'A fellow student ready to share what they know.'}</p>
-        <div className="discover-card-bottom"><span><Sparkles size={13} /> Two-way skill match</span><span>Year {match.peer.year_of_study}</span></div>
+        <div className="discover-card-bottom"><span><Sparkles size={13} /> Level: {match.requested?.proficiency_level}</span><span>Year {match.peer.year_of_study}</span></div>
       </div>)}
     </div>
-    {filtered.length === 0 && <EmptySmall title="No matches just yet" text="Try another search or add more skills to your profile." />}
+    {filtered.length === 0 && <EmptySmall title="No matches match your filters" text="Try clearing one of the filters or adding more skills to your profile." />}
   </section>
 }
 
@@ -402,16 +618,52 @@ function ExchangeList({ exchanges, studentId, students, skills, sessions, setPag
   return <section className="surface"><PanelHeading eyebrow="YOUR SHARED LEARNING JOURNEYS" title="My exchanges" action="Schedule a session" onAction={() => setPage('Sessions')} />{exchanges.length ? <div className="exchange-grid">{exchanges.map((exchange) => { const first = exchange.student_one_id === studentId; const partnerId = first ? exchange.student_two_id : exchange.student_one_id; const teachSkill = skills.get(first ? exchange.skill_one_id : exchange.skill_two_id)?.skill_name; const learnSkill = skills.get(first ? exchange.skill_two_id : exchange.skill_one_id)?.skill_name; const count = sessions.filter((session) => session.exchange_id === exchange.exchange_id).length; return <article className="exchange-card" key={exchange.exchange_id}><div className="exchange-card-top"><span className="exchange-icon"><Repeat2 size={17} /></span><span className={`status-tag status-${exchange.exchange_status}`}>{exchange.exchange_status}</span></div><h3>Learning with {students.get(partnerId)?.full_name ?? 'Student'}</h3><p>{students.get(partnerId)?.department}</p><div className="exchange-skills"><span><ArrowUpRight size={13} /> You teach <b>{teachSkill}</b></span><span><ArrowDownLeft size={13} /> You learn <b>{learnSkill}</b></span></div><div className="exchange-card-footer"><span><CalendarDays size={13} /> Since {new Date(`${exchange.start_date}T12:00:00`).toLocaleDateString('en', { month: 'short', day: 'numeric' })}</span><span>{count} session{count === 1 ? '' : 's'}</span></div></article> })}</div> : <EmptySmall title="Your first exchange is one good conversation away" text="Discover a reciprocal match and send them a request to get started." action="Discover students" onClick={() => setPage('Discover')} />}</section>
 }
 
-function Sessions({ sessions, studentId, students, skills, exchanges, showSchedule, setShowSchedule, scheduleSession }: { sessions: Session[]; studentId: number; students: Map<number, Student>; skills: Map<number, Skill>; exchanges: Exchange[]; showSchedule: boolean; setShowSchedule: (value: boolean) => void; scheduleSession: (event: FormEvent<HTMLFormElement>) => Promise<void> }) {
+function Sessions({
+  sessions, studentId, students, skills, exchanges, reviews,
+  showSchedule, setShowSchedule, scheduleSession, completeSession, submitReview, busy,
+}: {
+  sessions: Session[]; studentId: number; students: Map<number, Student>; skills: Map<number, Skill>
+  exchanges: Exchange[]; reviews: Review[]; showSchedule: boolean; setShowSchedule: (value: boolean) => void
+  scheduleSession: (event: FormEvent<HTMLFormElement>) => Promise<void>
+  completeSession: (session: Session) => Promise<void>
+  submitReview: (exchangeId: number, partnerId: number, rating: number, comment: string) => Promise<void>
+  busy: boolean
+}) {
   const sorted = [...sessions].sort((a, b) => a.session_date.localeCompare(b.session_date))
-  return <section className="surface"><div className="panel-heading"><div><div className="eyebrow">A LITTLE TIME ADDS UP</div><h2>Your learning sessions</h2></div><button className="button button-primary" onClick={() => setShowSchedule(!showSchedule)} disabled={!exchanges.length}><Plus size={15} /> Schedule a session</button></div>{showSchedule && <form className="schedule-form" onSubmit={(event) => void scheduleSession(event)}><label>Exchange<select name="exchange_id" required>{exchanges.map((exchange) => <option key={exchange.exchange_id} value={exchange.exchange_id}>With {students.get(exchange.student_one_id === studentId ? exchange.student_two_id : exchange.student_one_id)?.full_name}</option>)}</select></label><label>Session focus<select name="direction"><option value="learn">I’m learning</option><option value="teach">I’m teaching</option></select></label><label>Topic<input name="topic" required placeholder="What will you work on?" /></label><label>Date & time<input type="datetime-local" name="session_date" required min={new Date().toISOString().slice(0, 16)} /></label><label>Length<select name="duration_minutes"><option value="60">60 minutes</option><option value="45">45 minutes</option><option value="90">90 minutes</option></select></label><label>Meeting style<select name="meeting_mode"><option value="online">Online</option><option value="in_person">In person</option></select></label><div className="schedule-submit"><button className="button button-outline" type="button" onClick={() => setShowSchedule(false)}>Cancel</button><button className="button button-primary" type="submit">Save session</button></div></form>}{sorted.length ? <div className="sessions-full">{sorted.map((session) => { const partner = session.mentor_id === studentId ? session.learner_id : session.mentor_id; return <div className="session-row" key={session.session_id}><div className="date-block"><b>{new Date(session.session_date).toLocaleDateString('en', { day: '2-digit', timeZone: 'UTC' })}</b><span>{new Date(session.session_date).toLocaleDateString('en', { month: 'short', timeZone: 'UTC' }).toUpperCase()}</span></div><div className="session-copy"><b>{session.topic}</b><small>{skills.get(session.skill_id)?.skill_name} · {session.mentor_id === studentId ? 'You’re teaching' : 'You’re learning'} with {students.get(partner)?.full_name}</small></div><span className="mode-pill">{session.meeting_mode === 'online' ? 'Online' : 'In person'}</span><span className={`status-tag status-${session.session_status}`}>{session.session_status}</span></div> })}</div> : <EmptySmall title="No sessions on your calendar" text={exchanges.length ? 'Set up your first session with an exchange partner.' : 'Once an exchange is accepted, you can schedule sessions here.'} />}</section>
+  const [ratingMap, setRatingMap] = useState<Record<number, number>>({})
+  const [commentMap, setCommentMap] = useState<Record<number, string>>({})
+
+  return <section className="surface"><div className="panel-heading"><div><div className="eyebrow">A LITTLE TIME ADDS UP</div><h2>Your learning sessions</h2></div><button className="button button-primary" onClick={() => setShowSchedule(!showSchedule)} disabled={!exchanges.length}><Plus size={15} /> Schedule a session</button></div>{showSchedule && <form className="schedule-form" onSubmit={(event) => void scheduleSession(event)}><label>Exchange<select name="exchange_id" required>{exchanges.map((exchange) => <option key={exchange.exchange_id} value={exchange.exchange_id}>With {students.get(exchange.student_one_id === studentId ? exchange.student_two_id : exchange.student_one_id)?.full_name}</option>)}</select></label><label>Session focus<select name="direction"><option value="learn">I’m learning</option><option value="teach">I’m teaching</option></select></label><label>Topic<input name="topic" required placeholder="What will you work on?" /></label><label>Date & time<input type="datetime-local" name="session_date" required min={new Date().toISOString().slice(0, 16)} /></label><label>Length<select name="duration_minutes"><option value="60">60 minutes</option><option value="45">45 minutes</option><option value="90">90 minutes</option></select></label><label>Meeting style<select name="meeting_mode"><option value="online">Online</option><option value="in_person">In person</option></select></label><div className="schedule-submit"><button className="button button-outline" type="button" onClick={() => setShowSchedule(false)}>Cancel</button><button className="button button-primary" type="submit">Save session</button></div></form>}{sorted.length ? <div className="sessions-full">{sorted.map((session) => {
+    const partner = session.mentor_id === studentId ? session.learner_id : session.mentor_id
+    const alreadyReviewed = reviews.some((r) => r.exchange_id === session.exchange_id && r.reviewer_id === studentId)
+    return <div className="session-row" key={session.session_id}>
+      <div className="date-block"><b>{new Date(session.session_date).toLocaleDateString('en', { day: '2-digit', timeZone: 'UTC' })}</b><span>{new Date(session.session_date).toLocaleDateString('en', { month: 'short', timeZone: 'UTC' }).toUpperCase()}</span></div>
+      <div className="session-copy"><b>{session.topic}</b><small>{skills.get(session.skill_id)?.skill_name} · {session.mentor_id === studentId ? 'You’re teaching' : 'You’re learning'} with {students.get(partner)?.full_name}</small></div>
+      <div className="session-actions">
+        <span className="mode-pill">{session.meeting_mode === 'online' ? 'Online' : 'In person'}</span>
+        <span className={`status-tag status-${session.session_status}`}>{session.session_status}</span>
+        {session.session_status === 'scheduled' && (
+          <button type="button" className="complete-btn" disabled={busy} onClick={() => void completeSession(session)}>Mark completed</button>
+        )}
+        {session.session_status === 'completed' && !alreadyReviewed && (
+          <form className="rate-form" onSubmit={(e) => { e.preventDefault(); void submitReview(session.exchange_id, partner, ratingMap[session.session_id] ?? 5, commentMap[session.session_id] ?? '') }}>
+            <select aria-label="Rating" value={ratingMap[session.session_id] ?? 5} onChange={(e) => setRatingMap({ ...ratingMap, [session.session_id]: Number(e.target.value) })}>
+              <option value="5">★ 5</option><option value="4">★ 4</option><option value="3">★ 3</option><option value="2">★ 2</option><option value="1">★ 1</option>
+            </select>
+            <input placeholder="Short feedback" value={commentMap[session.session_id] ?? ''} onChange={(e) => setCommentMap({ ...commentMap, [session.session_id]: e.target.value })} />
+            <button type="submit" className="complete-btn" disabled={busy}><Star size={11} /> Rate</button>
+          </form>
+        )}
+      </div>
+    </div>
+  })}</div> : <EmptySmall title="No sessions on your calendar" text={exchanges.length ? 'Set up your first session with an exchange partner.' : 'Once an exchange is accepted, you can schedule sessions here.'} />}</section>
 }
 
 function Profile({ current, teaching, wanted, skills, skillMap, categoryMap, addSkill, removeTeachingSkill, removeWantedSkill, saveProfile, busy }: { current: Student; teaching: TeachingSkill[]; wanted: WantedSkill[]; skills: Skill[]; skillMap: Map<number, Skill>; categoryMap: Map<number, string>; addSkill: (event: FormEvent<HTMLFormElement>) => Promise<void>; removeTeachingSkill: (studentSkillId: number) => Promise<void>; removeWantedSkill: (wantedSkillId: number) => Promise<void>; saveProfile: (event: FormEvent<HTMLFormElement>) => Promise<void>; busy: boolean }) {
   const teacherIds = new Set(teaching.map((item) => item.skill_id))
   const wantedIds = new Set(wanted.map((item) => item.skill_id))
   const initials = current.full_name.split(' ').map((part) => part[0]).slice(0, 2).join('')
-  return <div className="profile-grid"><section className="surface profile-card"><div className="profile-hero"><div className="avatar profile-avatar">{initials}</div><div><div className="eyebrow">YOUR STUDENT PROFILE</div><h2>{current.full_name}</h2><span>{current.department} · Year {current.year_of_study}</span></div></div><form className="profile-form" onSubmit={(event) => void saveProfile(event)}><label>Full name<input name="full_name" defaultValue={current.full_name} required /></label><label>Department<input name="department" defaultValue={current.department} required /></label><label>Year of study<select name="year_of_study" defaultValue={current.year_of_study}>{[1, 2, 3, 4, 5, 6, 7, 8].map((year) => <option key={year} value={year}>Year {year}</option>)}</select></label><label className="wide-field">A little about you<textarea name="bio" defaultValue={current.bio ?? ''} placeholder="What are you curious about?" rows={3} /></label><div className="wide-field profile-email">Campus email <b>{current.email}</b></div><button className="button button-primary" type="submit" disabled={busy}>Save profile</button></form></section><div className="profile-skills"><section className="surface"><PanelHeading eyebrow="WHAT YOU CAN PASS ON" title="Skills I can teach" />{teaching.length ? teaching.map((item) => <div className="skill-list-row" key={item.student_skill_id}><span className="skill-mark teach-mark"><ArrowUpRight size={15} /></span><span><b>{skillMap.get(item.skill_id)?.skill_name}</b><small>{item.proficiency_level} · {item.experience_years} years</small></span><button className="skill-remove-button" type="button" aria-label={`Remove ${skillMap.get(item.skill_id)?.skill_name}`} disabled={busy} onClick={() => void removeTeachingSkill(item.student_skill_id)}><Trash2 size={15} /></button></div>) : <EmptySmall title="Add a skill you know" text="Everyone has something to teach." />}</section><section className="surface"><PanelHeading eyebrow="WHAT YOU’RE CURIOUS ABOUT" title="Skills I want to learn" />{wanted.length ? wanted.map((item) => <div className="skill-list-row" key={item.wanted_skill_id}><span className="skill-mark learn-mark"><ArrowDownLeft size={15} /></span><span><b>{skillMap.get(item.skill_id)?.skill_name}</b><small>Target: {item.target_level}</small></span><button className="skill-remove-button" type="button" aria-label={`Remove ${skillMap.get(item.skill_id)?.skill_name}`} disabled={busy} onClick={() => void removeWantedSkill(item.wanted_skill_id)}><Trash2 size={15} /></button></div>) : <EmptySmall title="Add something you want to learn" text="This helps us find your kind of match." />}</section></div><section className="surface add-skill-panel"><PanelHeading eyebrow="KEEP YOUR PROFILE GROWING" title="Add a skill" /><form className="add-skill-form" onSubmit={(event) => void addSkill(event)}><label>Skill<select name="skill_id" required defaultValue=""> <option value="" disabled>Choose a skill</option>{skills.map((skill) => <option key={skill.skill_id} value={skill.skill_id} disabled={teacherIds.has(skill.skill_id) && wantedIds.has(skill.skill_id)}>{skill.skill_name} · {categoryMap.get(skill.category_id)}</option>)}</select></label><label>I want to<select name="direction"><option value="teach">Teach it</option><option value="learn">Learn it</option></select></label><label>Level<select name="level"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option><option value="expert">Expert</option></select></label><label className="experience-field">Experience in years<input name="experience" type="number" min="0" max="99" step="0.5" defaultValue="0" /></label><button className="button button-primary" type="submit" disabled={busy}><Plus size={15} /> Add skill</button></form></section></div>
+  return <div className="profile-grid"><section className="surface profile-card"><div className="profile-hero"><div className="avatar profile-avatar">{initials}</div><div><div className="eyebrow">YOUR STUDENT PROFILE</div><h2>{current.full_name}</h2><span>{current.department} · Year {current.year_of_study} · {current.credits ?? 10} credits</span></div></div><form className="profile-form" onSubmit={(event) => void saveProfile(event)}><label>Full name<input name="full_name" defaultValue={current.full_name} required /></label><label>Department<input name="department" defaultValue={current.department} required /></label><label>Year of study<select name="year_of_study" defaultValue={current.year_of_study}>{[1, 2, 3, 4, 5, 6, 7, 8].map((year) => <option key={year} value={year}>Year {year}</option>)}</select></label><label>Availability<select name="availability" defaultValue={current.availability ?? 'weekdays'}><option value="weekdays">Weekdays</option><option value="evenings">Evenings</option><option value="weekends">Weekends</option><option value="flexible">Flexible</option></select></label><label className="wide-field">A little about you<textarea name="bio" defaultValue={current.bio ?? ''} placeholder="What are you curious about?" rows={3} /></label><div className="wide-field profile-email">Campus email <b>{current.email}</b></div><button className="button button-primary" type="submit" disabled={busy}>Save profile</button></form></section><div className="profile-skills"><section className="surface"><PanelHeading eyebrow="WHAT YOU CAN PASS ON" title="Skills I can teach" />{teaching.length ? teaching.map((item) => <div className="skill-list-row" key={item.student_skill_id}><span className="skill-mark teach-mark"><ArrowUpRight size={15} /></span><span><b>{skillMap.get(item.skill_id)?.skill_name}</b><small>{item.proficiency_level} · {item.experience_years} years</small></span><button className="skill-remove-button" type="button" aria-label={`Remove ${skillMap.get(item.skill_id)?.skill_name}`} disabled={busy} onClick={() => void removeTeachingSkill(item.student_skill_id)}><Trash2 size={15} /></button></div>) : <EmptySmall title="Add a skill you know" text="Everyone has something to teach." />}</section><section className="surface"><PanelHeading eyebrow="WHAT YOU’RE CURIOUS ABOUT" title="Skills I want to learn" />{wanted.length ? wanted.map((item) => <div className="skill-list-row" key={item.wanted_skill_id}><span className="skill-mark learn-mark"><ArrowDownLeft size={15} /></span><span><b>{skillMap.get(item.skill_id)?.skill_name}</b><small>Target: {item.target_level}</small></span><button className="skill-remove-button" type="button" aria-label={`Remove ${skillMap.get(item.skill_id)?.skill_name}`} disabled={busy} onClick={() => void removeWantedSkill(item.wanted_skill_id)}><Trash2 size={15} /></button></div>) : <EmptySmall title="Add something you want to learn" text="This helps us find your kind of match." />}</section></div><section className="surface add-skill-panel"><PanelHeading eyebrow="KEEP YOUR PROFILE GROWING" title="Add a skill" /><form className="add-skill-form" onSubmit={(event) => void addSkill(event)}><label>Skill<select name="skill_id" required defaultValue=""> <option value="" disabled>Choose a skill</option>{skills.map((skill) => <option key={skill.skill_id} value={skill.skill_id} disabled={teacherIds.has(skill.skill_id) && wantedIds.has(skill.skill_id)}>{skill.skill_name} · {categoryMap.get(skill.category_id)}</option>)}</select></label><label>I want to<select name="direction"><option value="teach">Teach it</option><option value="learn">Learn it</option></select></label><label>Level<select name="level"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option><option value="expert">Expert</option></select></label><label className="experience-field">Experience in years<input name="experience" type="number" min="0" max="99" step="0.5" defaultValue="0" /></label><button className="button button-primary" type="submit" disabled={busy}><Plus size={15} /> Add skill</button></form></section></div>
 }
 
 export default App
