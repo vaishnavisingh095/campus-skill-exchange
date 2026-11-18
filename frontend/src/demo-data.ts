@@ -1,10 +1,10 @@
 // Small, read-only preview adapted from the workbook-backed SQL seed data.
 export const demoSnapshot = {
   students: [
-    { student_id: 1, full_name: 'Arjun Kumar', email: 'arjun.kumar@campus.edu', department: 'Computer Science Engineering', year_of_study: 3, section: 'A', bio: 'Interested in backend development and databases.', account_status: 'active' },
-    { student_id: 2, full_name: 'Rahul Sharma', email: 'rahul.sharma@campus.edu', department: 'Computer Science Engineering', year_of_study: 3, section: 'A', bio: 'UI/UX enthusiast who enjoys designing student applications.', account_status: 'active' },
-    { student_id: 3, full_name: 'Priya Nair', email: 'priya.nair@campus.edu', department: 'Electronics and Communication Engineering', year_of_study: 2, section: 'B', bio: 'Interested in embedded systems and technical communication.', account_status: 'active' },
-    { student_id: 8, full_name: 'Aditya Menon', email: 'aditya.menon@campus.edu', department: 'Electrical and Electronics Engineering', year_of_study: 2, section: 'A', bio: 'Interested in electronics, Excel and public speaking.', account_status: 'active' },
+    { student_id: 1, full_name: 'Arjun Kumar', email: 'arjun.kumar@campus.edu', department: 'Computer Science Engineering', year_of_study: 3, section: 'A', bio: 'Interested in backend development and databases.', availability: 'weekdays', credits: 14, account_status: 'active' },
+    { student_id: 2, full_name: 'Rahul Sharma', email: 'rahul.sharma@campus.edu', department: 'Computer Science Engineering', year_of_study: 3, section: 'A', bio: 'UI/UX enthusiast who enjoys designing student applications.', availability: 'evenings', credits: 12, account_status: 'active' },
+    { student_id: 3, full_name: 'Priya Nair', email: 'priya.nair@campus.edu', department: 'Electronics and Communication Engineering', year_of_study: 2, section: 'B', bio: 'Interested in embedded systems and technical communication.', availability: 'weekends', credits: 10, account_status: 'active' },
+    { student_id: 8, full_name: 'Aditya Menon', email: 'aditya.menon@campus.edu', department: 'Electrical and Electronics Engineering', year_of_study: 2, section: 'A', bio: 'Interested in electronics, Excel and public speaking.', availability: 'flexible', credits: 8, account_status: 'active' },
   ],
   skills: [
     { skill_id: 1, category_id: 1, skill_name: 'Python', description: 'Python programming for applications and automation' },

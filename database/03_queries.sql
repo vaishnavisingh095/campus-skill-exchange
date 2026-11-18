@@ -74,3 +74,27 @@ join public.wanted_skills a_wants on a_wants.student_id = a.student_id and a_wan
 where a.account_status = 'active' and b.account_status = 'active'
   and a.student_id < b.student_id
 order by student_a, student_b;
+
+-- 11. Filtered skill discovery by category, proficiency level, availability, and credits
+select st.student_id, st.full_name, st.department, st.availability, st.credits,
+       c.category_name, s.skill_name, ss.proficiency_level
+from public.student_skills ss
+join public.students st using (student_id)
+join public.skills s using (skill_id)
+join public.skill_categories c using (category_id)
+where st.account_status = 'active'
+  and ss.proficiency_level in ('intermediate', 'advanced', 'expert')
+  and st.credits >= 5
+order by st.credits desc, st.full_name;
+
+-- 12. Booking workflow summary: pending -> accepted -> completed sessions + credits
+select se.session_id, ex.exchange_status, se.session_status, se.session_date,
+       mentor.full_name as mentor, learner.full_name as learner,
+       sk.skill_name, se.topic, rv.rating
+from public.sessions se
+join public.skill_exchanges ex using (exchange_id)
+join public.students mentor on mentor.student_id = se.mentor_id
+join public.students learner on learner.student_id = se.learner_id
+join public.skills sk on sk.skill_id = se.skill_id
+left join public.reviews rv on rv.exchange_id = ex.exchange_id and rv.reviewer_id = se.learner_id
+order by se.session_date desc;
