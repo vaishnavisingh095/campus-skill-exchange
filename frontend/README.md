@@ -18,6 +18,6 @@ The development server prints a local URL, usually `http://localhost:5173`.
 
 For live data, run `database/01_schema.sql` and `database/02_seed_data.sql` in the Supabase SQL Editor first. If Supabase is unreachable, the app shows a read-only sample preview based on the synthetic workbook data.
 
-## Current demo behavior
+## Authentication & demo fallback
 
-The profile selector lets reviewers view the app as a sample student because authentication is not connected to the `students` table yet. When Supabase is available, profiles, skills, matches, requests, exchanges, sessions, reviews, and notifications are read from PostgreSQL; supported profile, skill, request, exchange, session, and notification actions write to those tables.
+Sign in with a verified `.edu` campus email via Supabase Auth (enforced by Row-Level Security policies in `database/01_schema.sql`). When `frontend/.env.local` is not configured, the profile selector lets reviewers explore the app in read-only demo mode.
