@@ -65,3 +65,31 @@ Campus Skill exchange/
 ├── plan.md                    # Phased delivery roadmap
 └── decision.md                # Key engineering trade-offs
 ```
+
+---
+
+## 🚀 Quick Start (Local Development)
+
+### 1. Database Setup (Supabase)
+In your Supabase **SQL Editor**, run the scripts in order:
+1. `database/01_schema.sql` (creates tables, indexes, and Row-Level Security policies)
+2. `database/02_seed_data.sql` (populates synthetic campus students, skills, and exchanges)
+
+### 2. Frontend Setup
+```bash
+git clone https://github.com/vaishnavisingh095/campus-skill-exchange.git
+cd "campus-skill-exchange/frontend"
+npm install
+```
+
+Create `frontend/.env.local` (never committed):
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
+
+Start the dev server:
+```bash
+npm run dev
+```
+*(If `.env.local` is omitted, the app automatically loads the read-only `demo-data.ts` preview.)*
