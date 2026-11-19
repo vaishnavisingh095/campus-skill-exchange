@@ -93,3 +93,24 @@ Start the dev server:
 npm run dev
 ```
 *(If `.env.local` is omitted, the app automatically loads the read-only `demo-data.ts` preview.)*
+
+---
+
+## 🌐 Deployment & CI
+
+### Vercel or Netlify
+- **Vercel:** Import the repo, set Root Directory to `frontend` (`frontend/vercel.json` is included), and add `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` in Environment Variables.
+- **Netlify:** Connect the repo (`netlify.toml` is already configured with `base = "frontend"` and `publish = "dist"`), and add the two `VITE_SUPABASE_*` variables.
+
+### GitHub Actions CI
+Every push or pull request to `main` runs `.github/workflows/ci.yml`:
+- `npm ci`
+- `npm run lint` (`oxlint`)
+- `npm run build` (`tsc -b && vite build`)
+
+---
+
+## 📚 Additional Documentation
+- [architecture.md](architecture.md) — System architecture & workflow state machine
+- [plan.md](plan.md) — Phased implementation roadmap
+- [decision.md](decision.md) — Key technical & security trade-offs
