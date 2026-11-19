@@ -1,49 +1,116 @@
-# Campus Skill Exchange Programme
+# 🎓 Campus Skill Exchange (`skillswap.`)
 
-## Problem statement
+[![Frontend CI](https://github.com/vaishnavisingh095/campus-skill-exchange/actions/workflows/ci.yml/badge.svg)](https://github.com/vaishnavisingh095/campus-skill-exchange/actions/workflows/ci.yml)
+[![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=000)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?logo=typescript&logoColor=fff)](https://www.typescriptlang.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-Auth%20%2B%20RLS%20%2B%20Realtime-3ECF8E?logo=supabase&logoColor=fff)](https://supabase.com/)
 
-Students often have useful skills to teach but no simple way to find classmates who want to learn them, and vice versa.
+A peer-to-peer **campus learning and skill-exchange platform** where university students teach what they know, learn what they want, earn skill credits, schedule sessions, and rate completed exchanges—without any monetary transactions.
 
-## Proposed solution
+---
 
-Campus Skill Exchange records student profiles, skills offered and wanted, reciprocal matches, exchange requests, learning sessions, reviews and notifications in a relational PostgreSQL database.
+## 🏗️ System Architecture
 
-## Main workflow
+```mermaid
+flowchart TD
+    Student[Student Browser] --> ReactUI[React 19 + TypeScript + Vite App]
+    ReactUI -->|".edu Email Sign-In / Sign-Up"| SupaAuth[Supabase Auth]
+    ReactUI -->|"Queries, Mutations & Realtime"| SupaDB[(Supabase PostgreSQL)]
+    ReactUI -->|"Offline Preview Fallback"| DemoData[demo-data.ts]
 
-Students create profiles and list skills they can teach and want to learn. The database can find reciprocal matches. Students send and respond to requests, organize an exchange, schedule sessions, and leave reviews.
+    subgraph Security_and_Data [PostgreSQL + Row-Level Security]
+        SupaAuth -->|"auth.uid() -> current_student_id()"| RLS[RLS Policies]
+        RLS --> Profiles[students · credits · availability]
+        RLS --> Catalog[skill_categories · skills · student_skills · wanted_skills]
+        RLS --> Booking[exchange_requests -> skill_exchanges -> sessions -> reviews]
+        RLS --> Alerts[notifications]
+    end
 
-## Database tables
-
-`students`, `skill_categories`, `skills`, `student_skills`, `wanted_skills`, `exchange_requests`, `skill_exchanges`, `sessions`, `reviews`, and `notifications`.
-
-## Technology stack
-
-- Supabase PostgreSQL (hosted database)
-- SQL for schema, sample data and demonstrations
-- React, TypeScript and Vite for the interactive interface
-- Supabase JavaScript client for browser database access
-
-## Current implementation status
-
-The PostgreSQL schema, workbook-derived synthetic seed records, and demonstration queries are included. The React interface reads the student, skill, request, exchange, session, review, and notification tables, and includes database actions for profiles, skills, requests, and sessions. Authentication is not connected yet; reviewers select a sample student profile. If Supabase cannot be reached, the app presents a read-only sample preview. The synthetic workbook `Campus_Skill_Exchange_Synthetic_Data.xlsx` is retained as the project data reference. `database/schema.sql` was present but empty and has been preserved.
-
-## Run SQL in Supabase
-
-1. Open the existing Supabase project and select **SQL Editor**.
-2. Open `database/01_schema.sql`, copy its contents into a new SQL Editor query, and run it.
-3. On an empty set of these tables, run database/02_seed_data.sql after the schema. Its foreign-key values follow the workbook row order, so do not run it a second time or after unrelated rows have been added.
-4. Use `database/03_queries.sql` for basic verification and demonstrations.
-
-The SQL files contain no Supabase credentials. Run them through the project SQL Editor. The browser uses `frontend/.env.local` for the project URL and anon key; that file is ignored by Git. Never put a service-role key in a browser app.
-
-## Open the review interface
-
-Start the React app from the `frontend` directory:
-
-```powershell
-cd frontend
-npm install
-npm run dev
+    subgraph CI_CD [CI/CD Pipeline]
+        GitHub[GitHub main] -->|"Push / PR"| Actions[GitHub Actions: oxlint + tsc + vite build]
+        GitHub -->|"Auto-Deploy"| Hosting[Vercel / Netlify]
+    end
 ```
 
-Vite prints the local preview URL, usually `http://localhost:5173`. See `frontend/README.md` for Supabase configuration and preview behavior.
+---
+
+## ✨ Key Features
+
+- **🔐 Campus `.edu` Auth & Row-Level Security:** Sign in / sign up with campus email (`frontend/src/lib/supabase.ts`). PostgreSQL RLS policies (`database/01_schema.sql`) ensure students can only edit their own skill listings, requests, sessions, and reviews.
+- **🤝 Reciprocal Skill Matching:** Automatically surfaces two-way matches where Peer A teaches what Peer B wants and vice versa.
+- **🔍 Instant Search, Filters & Skill Tags:** Filter matches in real time by **category**, **proficiency level** (`Beginner` / `Intermediate` / `Advanced` / `Expert`), **availability** (`weekdays` / `evenings` / `weekends` / `flexible`), **minimum credits**, and clickable **skill tags**.
+- **📅 Live Booking Workflow (`pending` → `accepted` → `completed`):** Send/accept requests, schedule online or in-person sessions, mark sessions completed (`+2` mentor credits), and submit **1–5 ★ ratings & feedback**—synced live via Supabase Realtime.
+- **⚡ Offline Demo Fallback:** Works immediately out of the box with `demo-data.ts` if Supabase credentials are not configured yet.
+
+---
+
+## 🗄️ Database & Project Structure
+
+```text
+Campus Skill exchange/
+├── .github/workflows/ci.yml   # GitHub Actions (oxlint + tsc + vite build)
+├── database/
+│   ├── 01_schema.sql          # Tables, indexes, and RLS policies
+│   ├── 02_seed_data.sql       # Synthetic campus dataset
+│   ├── 03_queries.sql         # Matching, filtering & booking queries
+│   └── 04_reset_seed.sql      # Reset & re-seed helper
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx            # Main React app (Overview, Discover, Requests, Exchanges, Sessions, Profile)
+│   │   ├── lib/supabase.ts    # Supabase client + campus .edu auth helpers
+│   │   └── demo-data.ts       # Offline read-only fallback snapshot
+│   └── vercel.json            # Vercel SPA deployment config
+├── netlify.toml               # Netlify build & SPA redirect config
+├── architecture.md            # System architecture & workflow lifecycle
+├── plan.md                    # Phased delivery roadmap
+└── decision.md                # Key engineering trade-offs
+```
+
+---
+
+## 🚀 Quick Start (Local Development)
+
+### 1. Database Setup (Supabase)
+In your Supabase **SQL Editor**, run the scripts in order:
+1. `database/01_schema.sql` (creates tables, indexes, and Row-Level Security policies)
+2. `database/02_seed_data.sql` (populates synthetic campus students, skills, and exchanges)
+
+### 2. Frontend Setup
+```bash
+git clone https://github.com/vaishnavisingh095/campus-skill-exchange.git
+cd "campus-skill-exchange/frontend"
+npm install
+```
+
+Create `frontend/.env.local` (never committed):
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
+
+Start the dev server:
+```bash
+npm run dev
+```
+*(If `.env.local` is omitted, the app automatically loads the read-only `demo-data.ts` preview.)*
+
+---
+
+## 🌐 Deployment & CI
+
+### Vercel or Netlify
+- **Vercel:** Import the repo, set Root Directory to `frontend` (`frontend/vercel.json` is included), and add `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` in Environment Variables.
+- **Netlify:** Connect the repo (`netlify.toml` is already configured with `base = "frontend"` and `publish = "dist"`), and add the two `VITE_SUPABASE_*` variables.
+
+### GitHub Actions CI
+Every push or pull request to `main` runs `.github/workflows/ci.yml`:
+- `npm ci`
+- `npm run lint` (`oxlint`)
+- `npm run build` (`tsc -b && vite build`)
+
+---
+
+## 📚 Additional Documentation
+- [architecture.md](architecture.md) — System architecture & workflow state machine
+- [plan.md](plan.md) — Phased implementation roadmap
+- [decision.md](decision.md) — Key technical & security trade-offs
